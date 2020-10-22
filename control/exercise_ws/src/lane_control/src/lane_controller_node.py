@@ -163,6 +163,8 @@ class LaneControllerNode(DTROS):
 
         relative_name = rospy.get_param("relative_name")
 
+        lookup_distance = rospy.get_param("lookup_distance",0.2)
+        offset =  rospy.get_param("offset",0.17)
 
 
         if self.breakpoints_enabled:
@@ -170,9 +172,7 @@ class LaneControllerNode(DTROS):
             self.log('break on this line')
 
         yellow_lines = []
-        yellow_lines_np = []
         white_lines = []
-        white_lines_np = []
 
         lines_dict = {}
 
@@ -185,22 +185,11 @@ class LaneControllerNode(DTROS):
             if segment.color==1:
                 #Yellow line.
                 yellow_lines.append((start,end))
-                yellow_lines_np.append([segment.points[0].x,
-                                        segment.points[0].y,
-                                        segment.points[1].x,
-                                        segment.points[1].y])
-
+                
 
             elif segment.color==0:
                 #White line.
                 white_lines.append((start,end))
-                white_lines_np.append([segment.points[0].x,
-                        segment.points[0].y,
-                        segment.points[1].x,
-                        segment.points[1].y])
-
-        yellow_lines_np = np.array(yellow_lines_np)
-        white_lines_np = np.array(white_lines_np)
 
         lines = {}
         lines["white"] = white_lines
@@ -216,58 +205,13 @@ class LaneControllerNode(DTROS):
             debugpy.breakpoint()
             self.log('break on this line')
 
-        lookup_distance =self.lookup_distance
+        #lookup_distance =self.lookup_distance
 
         aim_y = 0
         aim_x = lookup_distance
         match=False
 
-        car_control_msg.v = self.last_v
         car_control_msg.omega = self.last_omega
-
-        found_yellow_line = False
-        found_white_right_line = False
-
-        #Basic line detection        
-        if len(yellow_lines_np)>0:
-            dist_p1 = np.sqrt(yellow_lines_np[:,0]**2 + yellow_lines_np[:,1]**2)
-            #dist_p2 = np.sqrt(yellow_lines_np[:,2]**2 + yellow_lines_np[:,3]**2)
-            valid_points = yellow_lines_np[
-                (dist_p1 > self.lookup_distance-self.lookup_depth) & 
-                (dist_p1 < self.lookup_distance+self.lookup_depth)]
-
-            #The yellow line should not be right of the duckie.
-            #valid_points = valid_points[(valid_points[:,1]>0) & (valid_points[:,3]>0)]
-
-            if len(valid_points)>0:
-                aim_x = np.median(valid_points[:,[0,2]])
-                aim_y = np.median(valid_points[:,[1,3]]) - self.right_offset
-                match=True
-                found_yellow_line = True
-        
-        if len(white_lines_np)>0:
-            dist_p1 = np.sqrt(white_lines_np[:,0]**2 + white_lines_np[:,1]**2)
-            #dist_p2 = np.sqrt(yellow_lines_np[:,2]**2 + yellow_lines_np[:,3]**2)
-            valid_points=white_lines_np
-            #valid_points = white_lines_np[
-            #    (dist_p1 > self.white_lookup_distance-self.lookup_depth) & 
-            #    (dist_p1 < self.white_lookup_distance+self.lookup_depth)]
-            right_white_line = valid_points[(valid_points[:,1]<0) & (valid_points[:,3]<0)]
-            #The right white line cannot be more than 25 centimeters ahead
-            right_white_line = valid_points[(valid_points[:,0]<0.25) & (valid_points[:,2]<0.25)]
-            
-            if len(right_white_line)>0 and not found_yellow_line:
-                #We did not see the yellow line, so 
-                #the next best guess in to follow the white right line.
-                found_white_right_line=True
-                aim_x = np.median(right_white_line[:,[0,2]])
-                aim_y = np.median(right_white_line[:,[1,3]]) + self.right_offset
-
-        match = found_white_right_line | found_yellow_line
-        if match:
-            car_control_msg.v = self.max_speed
-            alpha = np.arctan(aim_y/aim_x)
-            car_control_msg.omega = np.sin(alpha) / self.K
 
         yellow_aim_point = None
         white_aim_point = None
@@ -275,14 +219,14 @@ class LaneControllerNode(DTROS):
         x, y = get_xy(lines["white"])
         try:
             a,b = fit(x,y)
-            white_aim_point = get_aim_point(a,b,self.lookup_distance,-self.right_offset)
+            white_aim_point = get_aim_point(a,b,lookup_distance,-offset)
         except ValueError:
             pass
 
         x, y = get_xy(lines["yellow"])
         try:
             a,b = fit(x,y)
-            yellow_aim_point = get_aim_point(a,b,self.lookup_distance,self.right_offset)
+            yellow_aim_point = get_aim_point(a,b,lookup_distance,offset)
         except ValueError:
             pass
 
@@ -302,11 +246,14 @@ class LaneControllerNode(DTROS):
         else:
             self.last_aim_point=aim_point
 
-        car_control_msg.v = self.max_speed
+        car_control_msg.v = rospy.get_param("speed",0.2)
         alpha = np.arctan(aim_point[1]/aim_point[0])
-        car_control_msg.omega = np.sin(alpha) / self.K
+        car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.3)
 
-        self.log(f"v={car_control_msg.v}, omega = {car_control_msg.omega:.2f}. Aim: {aim_point[0]:2.f},{aim_point[1]:2.f. y:.2f}, {relative_name}")
+        if car_control_msg.omega > rospy.get_param("turn_th",0.05):
+            car_control_msg.v = rospy.get_param("turn_speed",0.15)
+
+        self.log(f"v={car_control_msg.v}, omega = {car_control_msg.omega:.2f}. Aim: {aim_point[0]:.2f},{aim_point[1]:.2f}, {relative_name}")
 
         #self.log(f"Aim point:"{aim_point})
 
