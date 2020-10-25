@@ -47,8 +47,13 @@ def show_line(a,b,c):
     model_y = line_func(model_x, a,b)
     plt.plot(model_x, model_y, c)
 
-def get_aim_point(a,b, dist, offset):
+def get_aim_point(a,b, dist, offset, white_line=False):
     x, y = dist,dist*a+b-offset
+    #patch for the dreaded "s" curve:
+    if b > 0 and white_line:
+        #Looks like we are about to cross the line,
+        #let's turn right!
+        x, y = dist, rospy.get_param("patch_right_turn",-0.15)
     return (x,y)
 
 
@@ -108,7 +113,7 @@ class LaneControllerNode(DTROS):
         #debugpy.listen(5678)
         self.log("Waiting for debugger attach")
 
-        self.right_offset = 0.18
+        self.right_offset = 0.14
         self.lookup_distance = 0.2
         self.lookup_depth = 0.2
         self.white_lookup_distance=0.4
@@ -217,16 +222,18 @@ class LaneControllerNode(DTROS):
         white_aim_point = None
         #New code here
         x, y = get_xy(lines["white"])
+        a_w = b_w = -1
         try:
-            a,b = fit(x,y)
-            white_aim_point = get_aim_point(a,b,lookup_distance,-offset)
+            a_w,b_w = fit(x,y)
+            white_aim_point = get_aim_point(a_w,b_w,lookup_distance,-offset, white_line=True)
         except ValueError:
             pass
 
         x, y = get_xy(lines["yellow"])
+        a_y=b_y=-1
         try:
-            a,b = fit(x,y)
-            yellow_aim_point = get_aim_point(a,b,lookup_distance,offset)
+            a_y,b_y = fit(x,y)
+            yellow_aim_point = get_aim_point(a_y,b_y,lookup_distance,offset)
         except ValueError:
             pass
 
@@ -246,14 +253,14 @@ class LaneControllerNode(DTROS):
         else:
             self.last_aim_point=aim_point
 
-        car_control_msg.v = rospy.get_param("speed",0.8)
+        car_control_msg.v = rospy.get_param("speed",0.6)
         alpha = np.arctan(aim_point[1]/aim_point[0])
-        car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.2)
+        car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.3)
 
-        if abs(car_control_msg.omega) > rospy.get_param("turn_th",0.35):
-            car_control_msg.v = rospy.get_param("turn_speed",0.15)
+        if abs(car_control_msg.omega) > rospy.get_param("turn_th",0.05):
+            car_control_msg.v = rospy.get_param("turn_speed",0.1)
 
-        self.log(f"v={car_control_msg.v}, omega = {car_control_msg.omega:.2f}. Aim: {aim_point[0]:.2f},{aim_point[1]:.2f}, {relative_name}")
+        self.log(f"v={car_control_msg.v}, omega = {car_control_msg.omega:.2f}. Aim: {aim_point[0]:.2f},{aim_point[1]:.2f}, {relative_name} {a_w:.2f} {b_w:.2f} | {a_y:.2f} {b_y:.2f}")
 
         #self.log(f"Aim point:"{aim_point})
 
