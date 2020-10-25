@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import rospy
-import debugpy
+#import debugpy
 import os
 import json
 
@@ -105,7 +105,7 @@ class LaneControllerNode(DTROS):
                                                             queue_size=1)
 
         self.log("Initialized!")
-        debugpy.listen(5678)
+        #debugpy.listen(5678)
         self.log("Waiting for debugger attach")
 
         self.right_offset = 0.18
@@ -163,12 +163,12 @@ class LaneControllerNode(DTROS):
 
         relative_name = rospy.get_param("relative_name")
 
-        lookup_distance = rospy.get_param("lookup_distance",0.2)
-        offset =  rospy.get_param("offset",0.17)
+        lookup_distance = rospy.get_param("lookup_distance",0.25)
+        offset =  rospy.get_param("offset",0.14)
 
 
         if self.breakpoints_enabled:
-            debugpy.breakpoint()
+            #debugpy.breakpoint()
             self.log('break on this line')
 
         yellow_lines = []
@@ -196,13 +196,13 @@ class LaneControllerNode(DTROS):
         lines["yellow"] = yellow_lines
 
         datalog = json.dumps(lines)
-        if self.last_datalog!=datalog:
+        if rospy.get_param("datalog",False) and (self.last_datalog!=datalog):
             with open(f"/code/datalog/segments_{segments_msg.header.seq}.json", "w") as f:
                 f.write(datalog)
             self.last_datalog = datalog
 
         if self.breakpoints_enabled:
-            debugpy.breakpoint()
+            #debugpy.breakpoint()
             self.log('break on this line')
 
         #lookup_distance =self.lookup_distance
@@ -246,11 +246,11 @@ class LaneControllerNode(DTROS):
         else:
             self.last_aim_point=aim_point
 
-        car_control_msg.v = rospy.get_param("speed",0.2)
+        car_control_msg.v = rospy.get_param("speed",0.8)
         alpha = np.arctan(aim_point[1]/aim_point[0])
-        car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.3)
+        car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.2)
 
-        if car_control_msg.omega > rospy.get_param("turn_th",0.05):
+        if abs(car_control_msg.omega) > rospy.get_param("turn_th",0.35):
             car_control_msg.v = rospy.get_param("turn_speed",0.15)
 
         self.log(f"v={car_control_msg.v}, omega = {car_control_msg.omega:.2f}. Aim: {aim_point[0]:.2f},{aim_point[1]:.2f}, {relative_name}")
