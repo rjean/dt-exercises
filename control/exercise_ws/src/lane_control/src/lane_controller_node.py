@@ -53,7 +53,7 @@ def get_aim_point(a,b, dist, offset, white_line=False):
     if b > 0 and white_line:
         #Looks like we are about to cross the line,
         #let's turn right!
-        x, y = dist, rospy.get_param("patch_right_turn",-0.25)
+        x, y = dist, rospy.get_param("patch_right_turn",-0.15)
     return (x,y)
 
 
@@ -172,7 +172,7 @@ class LaneControllerNode(DTROS):
         relative_name = rospy.get_param("relative_name")
 
         lookup_distance = rospy.get_param("lookup_distance",0.30)
-        offset =  rospy.get_param("offset",0.14)
+        offset =  rospy.get_param("offset",0.13)
 
 
         if self.breakpoints_enabled:
@@ -258,10 +258,10 @@ class LaneControllerNode(DTROS):
 
         #car_control_msg.v = rospy.get_param("speed",0.1)
         alpha = np.arctan(aim_point[1]/aim_point[0])
-        car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.25)
+        car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.2)
 
         norm = max(0, 1 - abs(car_control_msg.omega))
-        norm_speed = max(rospy.get_param("turn_speed",0.05), norm * rospy.get_param("speed",0.8))
+        norm_speed = max(rospy.get_param("turn_speed",0.10), norm * rospy.get_param("speed",0.6))
         car_control_msg.v= norm_speed
         #if abs(car_control_msg.omega) > rospy.get_param("turn_th",0.25):
         #    car_control_msg.v = rospy.get_param("turn_speed",0.20)

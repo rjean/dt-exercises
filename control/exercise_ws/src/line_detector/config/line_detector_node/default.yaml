@@ -10,10 +10,10 @@ colors:
     high_2: [180,255,255]
   WHITE:
     low: [0,0,50]
-    high: [180,100,255]
+    high: [180,125,255]
   YELLOW:
-    low: [25,100,50]
-    high: [40,255,255]
+    low: [15,40,40]
+    high: [32,255,255]
 
 line_detector_parameters:
   canny_thresholds: [80,200]
