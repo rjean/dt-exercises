@@ -9,8 +9,8 @@ import os
 import numpy as np
 from cv_bridge import CvBridge
 
-import debugpy
-debugpy.listen(("localhost", 5678))
+#import debugpy
+#debugpy.listen(("localhost", 5678))
 
 class LaneFilterNode(DTROS):
     """ Generates an estimate of the lane pose.

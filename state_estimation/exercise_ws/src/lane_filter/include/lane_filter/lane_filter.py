@@ -47,6 +47,7 @@ class LaneFilterHistogramKF():
 
         for p_name in param_names:
             assert p_name in kwargs
+            print(p_name)
             setattr(self, p_name, kwargs[p_name])
 
         self.mean_0 = [self.mean_d_0, self.mean_phi_0]
