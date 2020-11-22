@@ -1,5 +1,5 @@
 #!/bin/bash
-pip3 install debugpy
+#pip3 install debugpy
 source /environment.sh
 source /opt/ros/noetic/setup.bash
 source /code/catkin_ws/devel/setup.bash
