@@ -9,6 +9,8 @@ import os
 import numpy as np
 from cv_bridge import CvBridge
 
+import debugpy
+debugpy.listen(("localhost", 5678))
 
 class LaneFilterNode(DTROS):
     """ Generates an estimate of the lane pose.
@@ -125,6 +127,12 @@ class LaneFilterNode(DTROS):
         self.left_encoder_ticks_delta = 0
         self.right_encoder_ticks_delta = 0
 
+        d = self.filter.belief["mean"][0]
+        phi = self.filter.belief["mean"][1]
+        self.loginfo(f"d:{d}, phi:{phi}")
+
+        
+
         self.publishEstimate()
 
 
@@ -142,8 +150,11 @@ class LaneFilterNode(DTROS):
         timestamp_before_processing = rospy.Time.now()
 
         # Step 2: update
-        self.filter.update(segment_list_msg.segments)
-
+        try:
+            self.filter.update(segment_list_msg.segments)
+        except ValueError:
+            self.loginfo("No valid segments detected!")
+            
         self.publishEstimate(segment_list_msg)
 
 

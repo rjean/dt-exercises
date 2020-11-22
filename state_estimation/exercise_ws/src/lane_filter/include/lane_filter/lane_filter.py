@@ -40,6 +40,9 @@ class LaneFilterHistogramKF():
             'range_min',
             'range_est',
             'range_max',
+            'wheel_diameter',
+            "wheel_base_outer",
+            "wheel_base_inner"
         ]
 
         for p_name in param_names:
@@ -52,23 +55,105 @@ class LaneFilterHistogramKF():
         self.belief = {'mean': self.mean_0, 'covariance': self.cov_0}
 
         self.encoder_resolution = 0
-        self.wheel_radius = 0.0
+        self.wheel_radius = 0
         self.initialized = False
+
+    def kalman_predict(self, A, B, Q, mu_t, u_t, Sigma_t):
+        predicted_mu = A @ mu_t + B @ u_t
+        predicted_Sigma = A @ Sigma_t @ A.T + Q
+        return predicted_mu, predicted_Sigma
 
     def predict(self, dt, left_encoder_delta, right_encoder_delta):
         #TODO update self.belief based on right and left encoder data + kinematics
+        #R = 1
+
+        #Basic Kinematics Model
+        left_linear_movement = self.wheel_radius*2*3.1416*left_encoder_delta/self.encoder_resolution
+        right_linear_movement = self.wheel_radius*2*3.1416*right_encoder_delta/self.encoder_resolution
+
+        vl = left_linear_movement/dt
+        vr = right_linear_movement/dt
+
+        va = 0.5*(vl+vr)
+
+        wheel_base = (self.wheel_base_outer + self.wheel_base_outer)/2
+        L = wheel_base/(2*1000) #Convert millimeter wheelbase to metric
+
+        theta_dot = 0.5*(vr-vl)/L
+
+        #
+        A = np.array([[1,0],[0,1]])
+        mu_t = self.belief["mean"]
+        sigma_t = self.belief["covariance"]
+
+        u_t = np.array([va*dt, theta_dot*dt])
+        B = np.array([[np.sin(self.belief["mean"][1]), 0],[0,1]])
+
+        Q = np.array([[0.1, 0],[0,0.1]]) #Guessed variance for the physical model
+
+        predicted_mu, predicted_sigma = self.kalman_predict(A,B,Q,mu_t,u_t,sigma_t)
+
+        self.belief["mean"] = predicted_mu
+        self.belief["covariance"] = predicted_sigma
+
         if not self.initialized:
             return
+
+
+    def kalman_update(self, H, R, z, predicted_mu, predicted_Sigma):
+        residual_mean = z - H @ predicted_mu
+        residual_covariance = H @ predicted_Sigma @ H.T + R
+        try:
+            kalman_gain = predicted_Sigma @ H.T @ np.linalg.inv(residual_covariance)
+        except np.linalg.LinAlgError:
+            kalman_gain = 0
+        updated_mu = predicted_mu + kalman_gain @ residual_mean
+        updated_Sigma = predicted_Sigma - kalman_gain @ H @ predicted_Sigma
+        return updated_mu, updated_Sigma
+
 
     def update(self, segments):
         # prepare the segments for each belief array
         segmentsArray = self.prepareSegments(segments)
         # generate all belief arrays
 
+
         measurement_likelihood = self.generate_measurement_likelihood(
             segmentsArray)
 
+        if measurement_likelihood is None:
+            raise ValueError("No valid segments detected")
+
         # TODO: Parameterize the measurement likelihood as a Gaussian
+        d = np.arange(self.d_min,self.d_max,self.delta_d)
+        phi = np.arange(self.phi_min,self.phi_max,self.delta_phi)
+        
+        margin_d = measurement_likelihood.sum(axis=1)
+        margin_phi = measurement_likelihood.sum(axis=0)
+
+        d_mean = (margin_d*d).sum()
+        phi_mean = (margin_phi*phi).sum()
+
+        cov_d_phi = np.sqrt(np.multiply(np.outer(d-d_mean,phi-phi_mean)**2, measurement_likelihood**2).sum())
+        
+        var_d = np.sqrt(np.multiply((d-d_mean)**2, margin_d**2).sum())
+        var_phi = np.sqrt(np.multiply((phi-phi_mean)**2, margin_phi**2).sum())
+
+
+        # The predicted measurement is basically the predicted state.
+        H=np.array([[1,0],[0,1]])
+        # R is the covariance matrix of the measurement.
+        R = np.array([[var_d, cov_d_phi],[cov_d_phi, var_phi]])
+        # z is the measurement,  thus the mean of the measurement in our case.
+        z = np.array([d_mean, phi_mean])
+
+        predicted_mu = self.belief["mean"]
+        predicted_sigma = self.belief["covariance"]
+        updated_mu, updated_sigma = self.kalman_update(H,R,z,predicted_mu, predicted_sigma)
+
+        self.belief["mean"] = updated_mu
+        self.belief["covariance"] = updated_sigma
+        x = 1
 
         # TODO: Apply the update equations for the Kalman Filter to self.belief
 
