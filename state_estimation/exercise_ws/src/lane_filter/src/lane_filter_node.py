@@ -9,8 +9,8 @@ import os
 import numpy as np
 from cv_bridge import CvBridge
 
-#import debugpy
-#debugpy.listen(("localhost", 5678))
+import debugpy
+debugpy.listen(("localhost", 5678))
 
 class LaneFilterNode(DTROS):
     """ Generates an estimate of the lane pose.
@@ -152,6 +152,9 @@ class LaneFilterNode(DTROS):
         # Step 2: update
         try:
             self.filter.update(segment_list_msg.segments)
+            d = self.filter.belief["mean"][0]
+            phi = self.filter.belief["mean"][1]
+            self.loginfo(f"New segments. d:{d}, phi:{phi}")
         except ValueError:
             self.loginfo("No valid segments detected!")
             

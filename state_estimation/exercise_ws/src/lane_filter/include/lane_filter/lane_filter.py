@@ -58,6 +58,7 @@ class LaneFilterHistogramKF():
         self.encoder_resolution = 0
         self.wheel_radius = 0
         self.initialized = False
+        self.measurement_likelihood = None
 
     def kalman_predict(self, A, B, Q, mu_t, u_t, Sigma_t):
         predicted_mu = A @ mu_t + B @ u_t
@@ -117,7 +118,13 @@ class LaneFilterHistogramKF():
         # prepare the segments for each belief array
         segmentsArray = self.prepareSegments(segments)
         # generate all belief arrays
-
+        segments = []
+        segments_color =[]
+        for segment in segmentsArray:
+            pt1 = (segment.points[0].x, segment.points[0].y)
+            pt2 = (segment.points[1].x, segment.points[1].y)
+            segments.append((pt1, pt2))
+            segments_color.append(segment.color)
 
         measurement_likelihood = self.generate_measurement_likelihood(
             segmentsArray)
@@ -125,17 +132,31 @@ class LaneFilterHistogramKF():
         if measurement_likelihood is None:
             raise ValueError("No valid segments detected")
 
+        self.measurement_likelihood = measurement_likelihood
+#        #Apply temporal filtering
+        if self.measurement_likelihood is not None:
+            self.measurement_likelihood = np.multiply(measurement_likelihood, self.measurement_likelihood)
+        else:
+            self.measurement_likelihood = measurement_likelihood
+        
+        if self.measurement_likelihood.sum()!=0:
+            self.measurement_likelihood /= self.measurement_likelihood.sum()
+        else:
+            self.measurement_likelihood = measurement_likelihood
+
         # TODO: Parameterize the measurement likelihood as a Gaussian
         d = np.arange(self.d_min,self.d_max,self.delta_d)
         phi = np.arange(self.phi_min,self.phi_max,self.delta_phi)
         
-        margin_d = measurement_likelihood.sum(axis=1)
-        margin_phi = measurement_likelihood.sum(axis=0)
+        margin_d = self.measurement_likelihood.sum(axis=1)
+        margin_phi = self.measurement_likelihood.sum(axis=0)
 
-        d_mean = (margin_d*d).sum()
-        phi_mean = (margin_phi*phi).sum()
+        #d_mean = (margin_d*d).sum()
+        d_mean = d[np.argmax(margin_d)] # The mean is a biased estimator. Using the max of histogram as the mean.
+        #phi_mean = (margin_phi*phi).sum()
+        phi_mean = phi[np.argmax(margin_phi)] #Same bias proble. Using the max of histogram as the mean.
 
-        cov_d_phi = np.sqrt(np.multiply(np.outer(d-d_mean,phi-phi_mean)**2, measurement_likelihood**2).sum())
+        cov_d_phi = np.sqrt(np.multiply(np.outer(d-d_mean,phi-phi_mean)**2, self.measurement_likelihood**2).sum())
         
         var_d = np.sqrt(np.multiply((d-d_mean)**2, margin_d**2).sum())
         var_phi = np.sqrt(np.multiply((phi-phi_mean)**2, margin_phi**2).sum())
