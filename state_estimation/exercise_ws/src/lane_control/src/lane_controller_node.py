@@ -172,7 +172,7 @@ class LaneControllerNode(DTROS):
         relative_name = rospy.get_param("relative_name")
 
         lookup_distance = rospy.get_param("lookup_distance",0.30)
-        offset =  rospy.get_param("offset",0.16)
+        offset =  rospy.get_param("offset",0.13)
 
 
         if self.breakpoints_enabled:
@@ -261,7 +261,7 @@ class LaneControllerNode(DTROS):
         car_control_msg.omega = np.sin(alpha) / rospy.get_param("K",0.25)
 
         norm = max(0, 1 - abs(car_control_msg.omega))
-        norm_speed = max(rospy.get_param("turn_speed",0.15), norm * rospy.get_param("speed",0.8))
+        norm_speed = max(rospy.get_param("turn_speed",0.25), norm * rospy.get_param("speed",1.0))
         car_control_msg.v= norm_speed
         #if abs(car_control_msg.omega) > rospy.get_param("turn_th",0.25):
         #    car_control_msg.v = rospy.get_param("turn_speed",0.20)
