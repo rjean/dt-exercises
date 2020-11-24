@@ -171,7 +171,7 @@ class LaneControllerNode(DTROS):
 
         relative_name = rospy.get_param("relative_name")
 
-        lookup_distance = rospy.get_param("lookup_distance",0.30)
+        lookup_distance = rospy.get_param("lookup_distance",0.35)
         offset =  rospy.get_param("offset",0.13)
 
 
