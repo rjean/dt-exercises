@@ -50,14 +50,17 @@ class LaneFilterHistogramKF():
             print(p_name)
             setattr(self, p_name, kwargs[p_name])
 
-        self.mean_0 = [self.mean_d_0, self.mean_phi_0]
-        self.cov_0 = [[self.sigma_d_0, 0], [0, self.sigma_phi_0]]
 
-        self.belief = {'mean': self.mean_0, 'covariance': self.cov_0}
 
         self.encoder_resolution = 0
         self.wheel_radius = 0
         self.initialized = False
+        self.reset()
+
+    def reset(self):
+        self.mean_0 = [self.mean_d_0, self.mean_phi_0]
+        self.cov_0 = [[self.sigma_d_0, 0], [0, self.sigma_phi_0]]
+        self.belief = {'mean': self.mean_0, 'covariance': self.cov_0}
 
     def kalman_predict(self, A, B, Q, mu_t, u_t, Sigma_t):
         predicted_mu = A @ mu_t + B @ u_t
