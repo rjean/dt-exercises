@@ -5,7 +5,7 @@ import rospkg
 
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 from sensor_msgs.msg import CompressedImage, Image
-from duckietown_msgs.msg import Twist2DStamped, LanePose, WheelsCmdStamped, BoolStamped, FSMState, StopLineReading, AntiInstagramThresholds
+from duckietown_msgs.msg import SegmentList, Twist2DStamped, LanePose, WheelsCmdStamped, BoolStamped, FSMState, StopLineReading, AntiInstagramThresholds
 from image_processing.anti_instagram import AntiInstagram
 import cv2
 from object_detection.model import Wrapper
@@ -47,6 +47,12 @@ class ObjectDetectionNode(DTROS):
             queue_size=1
         )
         
+
+        self.pub_seglist_filtered = rospy.Publisher("~seglist_filtered",
+                                                    SegmentList,
+                                                    queue_size=1,
+                                                    dt_topic_type=TopicType.DEBUG)
+
         self.ai_thresholds_received = False
         self.anti_instagram_thresholds=dict()
         self.ai = AntiInstagram()

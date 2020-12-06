@@ -1,14 +1,15 @@
+import onnxruntime as ort
 
+import numpy as np
 
 class NoGPUAvailable(Exception):
     pass
 
 class Wrapper():
     def __init__(self, model_file):
-        # TODO Instantiate your model and other class instances here!
-        # TODO Don't forget to set your model in evaluation/testing/production mode, and sending it to the GPU
-        # TODO If no GPU is available, raise the NoGPUAvailable exception
-        pass
+        #Load the model
+        self.sess_ort = ort.InferenceSession("/code/exercise_ws/checkpoints/segmentation.onnx")
+        
     def predict(self, batch_or_image):
         # TODO Make your model predict here!
 
@@ -20,17 +21,20 @@ class Wrapper():
 
         # TODO This method should return a tuple of three lists of numpy arrays. The first is the bounding boxes, the
         # TODO second is the corresponding labels, the third is the scores (the probabilities)
+        #img=batch_or_image[0:120,0:160,:]
+        img = np.random.random_sample((1,120,160,3)) * 255
+        res = self.sess_ort.run(output_names=["output:0"], input_feed={"input_rgb:0": img.reshape((1,120,160,3)).astype(np.float32)})
 
         # See this pseudocode for inspiration
         boxes = []
         labels = []
         scores = []
         for img in batch_or_image:  # or simply pipe the whole batch to the model instead of using a loop!
-
-            box, label, score = self.model.predict(img) # TODO you probably need to send the image to a tensor, etc.
-            boxes.append(box)
-            labels.append(label)
-            scores.append(score)
+            pass
+            #box, label, score = self.model.predict(img) # TODO you probably need to send the image to a tensor, etc.
+            #boxes.append(box)
+            #labels.append(label)
+            #scores.append(score)
 
         return boxes, labels, scores
 
