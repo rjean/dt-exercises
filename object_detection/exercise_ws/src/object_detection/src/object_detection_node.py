@@ -2,11 +2,20 @@
 import numpy as np
 import rospy
 import rospkg
+import debugpy
+import os
+import yaml
+debugpy.listen(("localhost", 5678))
 
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 from sensor_msgs.msg import CompressedImage, Image
-from duckietown_msgs.msg import SegmentList, Twist2DStamped, LanePose, WheelsCmdStamped, BoolStamped, FSMState, StopLineReading, AntiInstagramThresholds
+from geometry_msgs.msg import Point as PointMsg
+from duckietown_msgs.msg import SegmentList, Segment, Twist2DStamped, LanePose, WheelsCmdStamped, BoolStamped, FSMState, StopLineReading, AntiInstagramThresholds
 from image_processing.anti_instagram import AntiInstagram
+from image_processing.ground_projection_geometry import GroundProjectionGeometry, Point
+
+
+
 import cv2
 from object_detection.model import Wrapper
 from cv_bridge import CvBridge
@@ -62,6 +71,9 @@ class ObjectDetectionNode(DTROS):
         rospack = rospkg.RosPack()
         model_file_absolute = rospack.get_path('object_detection') + model_file
         self.model_wrapper = Wrapper(model_file_absolute)
+        self.homography = self.load_extrinsics()
+        homography = np.array(self.homography).reshape((3, 3))
+        self.gpg = GroundProjectionGeometry(160,120, homography)
         self.initialized = True
         self.log("Initialized!")
     
@@ -93,15 +105,68 @@ class ObjectDetectionNode(DTROS):
                 image
             )
         
-        image = cv2.resize(image, (224,224))
+        #image = cv2.resize(image, (224,224))
+        img_small = cv2.resize(image, (160,120))
+        self.model_wrapper.segment_cv2_image(img_small)
+        yellow_segments_px = self.model_wrapper.get_yellow_segments_px()
+        white_segments_px = self.model_wrapper.get_white_segments_px()
+
+        yellow_segments = self.ground_project_segments_px(yellow_segments_px)
+        white_segments = self.ground_project_segments_px(white_segments_px)
+
+        seg_msg = SegmentList()
+        seg_msg.header = image_msg.header
+        for yellow_segment in yellow_segments:
+            new_segment = Segment()
+            ground_pt_msg_1 = PointMsg()
+            ground_pt_msg_1.z=0
+            ground_pt_msg_1.x=yellow_segment[0][0]
+            ground_pt_msg_1.y=yellow_segment[0][1]
+            ground_pt_msg_2 = PointMsg()
+            ground_pt_msg_2.z=0
+            ground_pt_msg_2.x=yellow_segment[1][0]
+            ground_pt_msg_2.y=yellow_segment[1][1]
+            new_segment.points[0] = ground_pt_msg_1
+            new_segment.points[1] = ground_pt_msg_2
+            new_segment.color = Segment.YELLOW
+            seg_msg.segments.append(new_segment)
+
+        self.pub_seglist_filtered.publish(seg_msg)
+
+
+
+        print(f"Found {len(yellow_segments_px)} yellow segments")
+            
+        
         bboxes, classes, scores = self.model_wrapper.predict(image)
+
         
         msg = BoolStamped()
         msg.header = image_msg.header
-        msg.data = self.det2bool(bboxes[0], classes[0]) # [0] because our batch size given to the wrapper is 1
+        if len(bboxes)==0:
+            #No detection at all!
+            msg.data = None
+        else:
+            msg.data = self.det2bool(bboxes[0], classes[0]) # [0] because our batch size given to the wrapper is 1
         
         self.pub_obj_dets.publish(msg)
     
+        
+    def ground_project_segments_px(self, segments_px):
+        x=[]
+        y=[]
+        segments=[]
+        for segment_px in segments_px:
+            pixel1 = Point(segment_px[0][0]*4,segment_px[0][1]*4) #Conversion. Points are converted in 640x480 for the homography to work
+            pixel2 = Point(segment_px[1][0]*4,segment_px[1][1]*4) #Conversion. Points are converted in 640x480 for the homography to work
+            ground_projected_point1 = self.gpg.pixel2ground(pixel1)
+            ground_projected_point2 = self.gpg.pixel2ground(pixel2)
+            pt1 = (ground_projected_point1.x, ground_projected_point1.y)
+            pt2 = (ground_projected_point2.x, ground_projected_point2.y)
+            segment = (pt1,pt2)
+            segments.append(segment)
+        return segments
+
     def det2bool(self, bboxes, classes):
         # TODO remove these debugging prints
         print(bboxes)
@@ -128,7 +193,37 @@ class ObjectDetectionNode(DTROS):
             # TODO if label isn't a duckie, skip
             # TODO if detection is a pedestrian in front of us:
             #   return True
+    def load_extrinsics(self):
+        """
+        Loads the homography matrix from the extrinsic calibration file.
+        Returns:
+            :obj:`numpy array`: the loaded homography matrix
+        """
+        # load intrinsic calibration
+        cali_file_folder = '/data/config/calibrations/camera_extrinsic/'
+        cali_file = cali_file_folder + rospy.get_namespace().strip("/") + ".yaml"
 
+        # Locate calibration yaml file or use the default otherwise
+        if not os.path.isfile(cali_file):
+            self.log("Can't find calibration file: %s.\n Using default calibration instead."
+                     % cali_file, 'warn')
+            cali_file = (cali_file_folder + "default.yaml")
+
+        # Shutdown if no calibration file not found
+        if not os.path.isfile(cali_file):
+            msg = 'Found no calibration file ... aborting'
+            self.log(msg, 'err')
+            rospy.signal_shutdown(msg)
+
+        try:
+            with open(cali_file,'r') as stream:
+                calib_data = yaml.load(stream)
+        except yaml.YAMLError:
+            msg = 'Error in parsing calibration file %s ... aborting' % cali_file
+            self.log(msg, 'err')
+            rospy.signal_shutdown(msg)
+
+        return calib_data['homography']
 
 
 if __name__ == "__main__":
