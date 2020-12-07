@@ -27,6 +27,10 @@ class LineSegmentVisualizer(DTROS):
             "~filtered_segment_list_markers", MarkerArray, queue_size=1,
             dt_topic_type=TopicType.DEBUG)
 
+        self.pub_seg_list_filtered = rospy.Publisher(
+            "~segmented_segment_list_markers", MarkerArray, queue_size=1,
+            dt_topic_type=TopicType.DEBUG)
+
         # Create a timer that calls the cbTimer function every 1.0 second
         # self.timer = rospy.Timer(rospy.Duration.from_sec(self.pub_timestep),self.cbTimer)
 
@@ -43,7 +47,9 @@ class LineSegmentVisualizer(DTROS):
             "~segment_list", SegmentList, self.cbSegList)
         self.sub_filtered_seg_list = rospy.Subscriber(
             "~segment_list_filtered", SegmentList, self.cbSegListFiltered)
-
+        
+        self.sub_segmented_seg_list = rospy.Subscriber(
+            "/agent/object_detection_node/seglist_filtered", SegmentList, self.cbSegListFiltered)
         rospy.loginfo("[%s] Initialzed." % (self.node_name))
 
     def cbSegList(self, seg_list_msg):
@@ -53,6 +59,12 @@ class LineSegmentVisualizer(DTROS):
         self.pub_seg_list.publish(marker_array)
 
     def cbSegListFiltered(self, seg_list_msg):
+        marker_array = MarkerArray()
+        marker_array.markers.append(self.segList2Marker(seg_list_msg))
+        # rospy.loginfo("[%s] publishing %s marker."%(self.node_name,len(marker_array.markers)))
+        self.pub_seg_list_filtered.publish(marker_array)
+    
+    def cbSegListSegmented(self, seg_list_msg):
         marker_array = MarkerArray()
         marker_array.markers.append(self.segList2Marker(seg_list_msg))
         # rospy.loginfo("[%s] publishing %s marker."%(self.node_name,len(marker_array.markers)))

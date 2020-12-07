@@ -5,6 +5,7 @@ import rospkg
 import debugpy
 import os
 import yaml
+from cv_bridge import CvBridge
 debugpy.listen(("localhost", 5678))
 
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
@@ -61,6 +62,11 @@ class ObjectDetectionNode(DTROS):
                                                     SegmentList,
                                                     queue_size=1,
                                                     dt_topic_type=TopicType.DEBUG)
+                                                    
+        self.pub_segmented_img = rospy.Publisher("~debug/segmented_image/compressed",
+                                              CompressedImage,
+                                              queue_size=1,
+                                              dt_topic_type=TopicType.DEBUG)
 
         self.ai_thresholds_received = False
         self.anti_instagram_thresholds=dict()
@@ -73,6 +79,7 @@ class ObjectDetectionNode(DTROS):
         self.model_wrapper = Wrapper(model_file_absolute)
         self.homography = self.load_extrinsics()
         homography = np.array(self.homography).reshape((3, 3))
+        self.bridge = CvBridge()
         self.gpg = GroundProjectionGeometry(160,120, homography)
         self.initialized = True
         self.log("Initialized!")
@@ -112,28 +119,20 @@ class ObjectDetectionNode(DTROS):
         white_segments_px = self.model_wrapper.get_white_segments_px()
 
         yellow_segments = self.ground_project_segments_px(yellow_segments_px)
+        #white_segments_px[0:60,0:160]=0 #Keep only white line of the left
         white_segments = self.ground_project_segments_px(white_segments_px)
 
         seg_msg = SegmentList()
         seg_msg.header = image_msg.header
-        for yellow_segment in yellow_segments:
-            new_segment = Segment()
-            ground_pt_msg_1 = PointMsg()
-            ground_pt_msg_1.z=0
-            ground_pt_msg_1.x=yellow_segment[0][0]
-            ground_pt_msg_1.y=yellow_segment[0][1]
-            ground_pt_msg_2 = PointMsg()
-            ground_pt_msg_2.z=0
-            ground_pt_msg_2.x=yellow_segment[1][0]
-            ground_pt_msg_2.y=yellow_segment[1][1]
-            new_segment.points[0] = ground_pt_msg_1
-            new_segment.points[1] = ground_pt_msg_2
-            new_segment.color = Segment.YELLOW
-            seg_msg.segments.append(new_segment)
+        self.add_segments(yellow_segments, seg_msg, Segment.YELLOW)
+        #self.add_segments(white_segments, seg_msg, Segment.WHITE)
 
         self.pub_seglist_filtered.publish(seg_msg)
+        segmented_img_cv = cv2.applyColorMap(self.model_wrapper.seg*64, cv2.COLORMAP_JET)
 
-
+        segmented_img = self.bridge.cv2_to_compressed_imgmsg(segmented_img_cv)
+        segmented_img.header.stamp = image_msg.header.stamp
+        self.pub_segmented_img.publish(segmented_img)
 
         print(f"Found {len(yellow_segments_px)} yellow segments")
             
@@ -150,6 +149,22 @@ class ObjectDetectionNode(DTROS):
             msg.data = self.det2bool(bboxes[0], classes[0]) # [0] because our batch size given to the wrapper is 1
         
         self.pub_obj_dets.publish(msg)
+
+    def add_segments(self, yellow_segments, seg_msg, color):
+        for yellow_segment in yellow_segments:
+            new_segment = Segment()
+            ground_pt_msg_1 = PointMsg()
+            ground_pt_msg_1.z=0
+            ground_pt_msg_1.x=yellow_segment[0][0]
+            ground_pt_msg_1.y=yellow_segment[0][1]
+            ground_pt_msg_2 = PointMsg()
+            ground_pt_msg_2.z=0
+            ground_pt_msg_2.x=yellow_segment[1][0]
+            ground_pt_msg_2.y=yellow_segment[1][1]
+            new_segment.points[0] = ground_pt_msg_1
+            new_segment.points[1] = ground_pt_msg_2
+            new_segment.color = color
+            seg_msg.segments.append(new_segment)
     
         
     def ground_project_segments_px(self, segments_px):
