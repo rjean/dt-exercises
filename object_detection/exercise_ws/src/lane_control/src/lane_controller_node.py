@@ -178,7 +178,7 @@ class LaneControllerNode(DTROS):
 
         relative_name = rospy.get_param("relative_name")
 
-        lookup_distance = rospy.get_param("lookup_distance",0.25)
+        lookup_distance = rospy.get_param("lookup_distance",0.35)
         offset =  rospy.get_param("offset",0.25)
 
 
@@ -274,7 +274,7 @@ class LaneControllerNode(DTROS):
         #
         alpha = np.arctan(aim_point[1]/aim_point[0])
         d_alpha = alpha-self.last_alpha
-        car_control_msg.omega = np.sin(alpha) * rospy.get_param("K",6)
+        car_control_msg.omega = np.sin(alpha) * rospy.get_param("K",8)
         car_control_msg.omega += np.sin(d_alpha) * rospy.get_param("D",100)
 
         self.last_alpha = alpha
@@ -285,7 +285,7 @@ class LaneControllerNode(DTROS):
         #if 
         car_control_msg.v = rospy.get_param("speed",1)
         if abs(car_control_msg.omega) > rospy.get_param("turn_th",2):
-            car_control_msg.v = rospy.get_param("turn_speed",0.7)
+            car_control_msg.v = rospy.get_param("turn_speed",0.6)
 
         self.log(f"v={car_control_msg.v}, alpha = {alpha:.2f} omega = {car_control_msg.omega:.2f}. Aim: {aim_point[0]:.2f},{aim_point[1]:.2f}")
 
