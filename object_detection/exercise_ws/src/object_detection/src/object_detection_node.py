@@ -120,12 +120,14 @@ class ObjectDetectionNode(DTROS):
 
         yellow_segments = self.ground_project_segments_px(yellow_segments_px)
         #white_segments_px[0:60,0:160]=0 #Keep only white line of the left
-        white_segments = self.ground_project_segments_px(white_segments_px)
+        #for segment in white_segments_px:
+
+        white_segments = self.ground_project_segments_px(white_segments_px, right_only=True)
 
         seg_msg = SegmentList()
         seg_msg.header = image_msg.header
         self.add_segments(yellow_segments, seg_msg, Segment.YELLOW)
-        #self.add_segments(white_segments, seg_msg, Segment.WHITE)
+        self.add_segments(white_segments, seg_msg, Segment.WHITE)
 
         self.pub_seglist_filtered.publish(seg_msg)
         segmented_img_cv = cv2.applyColorMap(self.model_wrapper.seg*64, cv2.COLORMAP_JET)
@@ -167,7 +169,7 @@ class ObjectDetectionNode(DTROS):
             seg_msg.segments.append(new_segment)
     
         
-    def ground_project_segments_px(self, segments_px):
+    def ground_project_segments_px(self, segments_px, right_only=False, xmin=0.1, xmax=0.6):
         x=[]
         y=[]
         segments=[]
@@ -179,6 +181,13 @@ class ObjectDetectionNode(DTROS):
             pt1 = (ground_projected_point1.x, ground_projected_point1.y)
             pt2 = (ground_projected_point2.x, ground_projected_point2.y)
             segment = (pt1,pt2)
+            if right_only: #For the white line, we assume it is right of the duckie.
+                if pt1[1] > 0 or pt2[1] > 0: 
+                    continue
+            if pt1[0] < xmin or pt2[0] < xmin: #Not to close to the duckiebot.
+                continue
+            if pt1[0] > xmax or pt2[0] > xmax: #Neither too far!
+                continue
             segments.append(segment)
         return segments
 
