@@ -11,6 +11,8 @@ cloudpickle>=1.2.0,<1.4.0
 dataclasses<=0.6; python_version < '3.7'
 carnivalmirror==0.6.2
 duckietown-world-daffy
+onnxruntime
+debugpy
 
 # testing
 pipdeptree

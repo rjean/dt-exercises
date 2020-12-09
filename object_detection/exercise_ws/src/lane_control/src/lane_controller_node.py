@@ -235,7 +235,7 @@ class LaneControllerNode(DTROS):
         a_w = b_w = -1
         try:
             a_w,b_w = fit(x,y)
-            #white_aim_point = get_aim_point(a_w,b_w,lookup_distance,-offset, white_line=True)
+            white_aim_point = get_aim_point(a_w,b_w,lookup_distance,-offset, white_line=True)
         except ValueError:
             pass
 
